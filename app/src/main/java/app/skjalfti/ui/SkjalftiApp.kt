@@ -26,6 +26,8 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import app.skjalfti.Engine
 import app.skjalfti.Skin
 import app.skjalfti.data.Locator
+import app.skjalfti.update.UpdateWatch
+import androidx.compose.runtime.LaunchedEffect
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import kotlinx.coroutines.delay
@@ -50,6 +52,7 @@ fun SkjalftiApp() {
         ) {
             scope.launch { Engine.locate(context, auto = true) }
         }
+        scope.launch { runCatching { UpdateWatch.check(context, background = false) } }
         val job = scope.launch {
             while (true) {
                 Engine.refresh()
@@ -59,6 +62,15 @@ fun SkjalftiApp() {
         onPauseOrDispose {
             job.cancel()
             Engine.unlisten("ui")
+        }
+    }
+
+    // The update notification or the Live card asks to open Setup.
+    val openUpdates by UpdateWatch.openUpdates.collectAsState()
+    LaunchedEffect(openUpdates) {
+        if (openUpdates) {
+            tab = Tab.SETUP
+            UpdateWatch.openUpdates.value = false
         }
     }
 

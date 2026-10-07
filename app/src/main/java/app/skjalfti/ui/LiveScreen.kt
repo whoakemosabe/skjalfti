@@ -112,6 +112,7 @@ fun LiveScreen(onOpenLog: () -> Unit) {
             }
         }
 
+        UpdateCard()
         LocationNudge()
 
         // The screen

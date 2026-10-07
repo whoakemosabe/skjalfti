@@ -37,6 +37,8 @@ fun SetupScreen() {
             Choice(Skin.entries, skin, { it.label }, { Engine.setSkin(it) })
         }
 
+        UpdateSection()
+
         LocationSection()
 
         Section("Radius", "Only quakes this close show on the log.") {

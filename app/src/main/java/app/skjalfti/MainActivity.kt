@@ -11,7 +11,9 @@ import androidx.compose.foundation.LocalOverscrollFactory
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.CompositionLocalProvider
+import android.content.Intent
 import app.skjalfti.ui.SkjalftiApp
+import app.skjalfti.update.UpdateWatch
 import app.skjalfti.watch.WatchService
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -24,6 +26,10 @@ class MainActivity : ComponentActivity() {
         )
         Engine.init(this)
         WatchService.createChannels(this)
+        UpdateWatch.createChannel(this)
+        UpdateWatch.schedule(this)
+        UpdateWatch.waitingVersion.value = UpdateWatch.waiting(this)
+        handleIntent(intent)
         setContent {
             // No stretch overscroll: inside the recorded glass layer its spring-back can stick.
             CompositionLocalProvider(LocalOverscrollFactory provides null) {
@@ -31,6 +37,19 @@ class MainActivity : ComponentActivity() {
                     SkjalftiApp()
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleIntent(intent)
+    }
+
+    /** The "update ready" notification asks to open Setup's update section. */
+    private fun handleIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra(UpdateWatch.EXTRA_OPEN_UPDATES, false) == true) {
+            intent.removeExtra(UpdateWatch.EXTRA_OPEN_UPDATES)
+            UpdateWatch.openUpdates.value = true
         }
     }
 }
