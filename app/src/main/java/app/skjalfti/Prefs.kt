@@ -1,7 +1,8 @@
 package app.skjalfti
 
 import android.content.Context
-import app.skjalfti.data.Home
+import app.skjalfti.data.Place
+import app.skjalfti.data.Places
 import app.skjalfti.seismo.Channel
 import app.skjalfti.seismo.Sensitivity
 
@@ -15,9 +16,31 @@ class Prefs(context: Context) {
         get() = enumOr(p.getString("skin", null), Skin.PIXEL)
         set(v) = p.edit().putString("skin", v.name).apply()
 
-    var home: Home
-        get() = enumOr(p.getString("home", null), Home.NJARDVIK)
-        set(v) = p.edit().putString("home", v.name).apply()
+    /** The current home: a preset, a GPS fix or a saved place. */
+    var home: Place
+        get() = Place.fromJson(p.getString("home_place", null)) ?: legacyHome()
+        set(v) = p.edit().putString("home_place", v.toJson().toString()).apply()
+
+    /** Places the user saved, newest first. */
+    var saved: List<Place>
+        get() = Place.listFromJson(p.getString("saved_places", null))
+        set(v) = p.edit().putString("saved_places", Place.listToJson(v)).apply()
+
+    /** Re-check GPS when the app opens and move home if the phone has moved. */
+    var autoLocate: Boolean
+        get() = p.getBoolean("auto_locate", false)
+        set(v) = p.edit().putBoolean("auto_locate", v).apply()
+
+    /** The Live screen's "use my location?" card was answered. */
+    var locationAsked: Boolean
+        get() = p.getBoolean("location_asked", false)
+        set(v) = p.edit().putBoolean("location_asked", v).apply()
+
+    // Builds before saved places stored the home as a preset name.
+    private fun legacyHome(): Place {
+        val old = p.getString("home", null)?.lowercase() ?: return Places.NJARDVIK
+        return Places.presets.firstOrNull { it.id == old } ?: Places.NJARDVIK
+    }
 
     var channel: Channel
         get() = enumOr(p.getString("channel", null), Channel.Z)

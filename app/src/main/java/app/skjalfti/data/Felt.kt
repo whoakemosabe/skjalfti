@@ -6,16 +6,6 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-/** Where the phone lives. Distances and arrival times are measured from here. */
-enum class Home(val label: String, val lat: Double, val lon: Double) {
-    NJARDVIK("Njarðvík", 63.976, -22.548),
-    KEFLAVIK("Keflavík", 64.002, -22.558),
-    GRINDAVIK("Grindavík", 63.842, -22.433),
-    VOGAR("Vogar", 63.980, -22.383),
-    HAFNARFJORDUR("Hafnarfjörður", 64.067, -21.952),
-    REYKJAVIK("Reykjavík", 64.146, -21.942),
-}
-
 object Geo {
     /** Great-circle distance in km. */
     fun km(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
@@ -27,10 +17,10 @@ object Geo {
         return 2 * r * asin(sqrt(a.coerceIn(0.0, 1.0)))
     }
 
-    fun epicentreKm(q: Quake, home: Home) = km(home.lat, home.lon, q.lat, q.lon)
+    fun epicentreKm(q: Quake, home: Place) = km(home.lat, home.lon, q.lat, q.lon)
 
     /** Straight-line distance to the quake's focus, through the ground. */
-    fun hypocentreKm(q: Quake, home: Home): Double {
+    fun hypocentreKm(q: Quake, home: Place): Double {
         val e = epicentreKm(q, home)
         return sqrt(e * e + q.depthKm * q.depthKm)
     }
@@ -61,14 +51,14 @@ object Felt {
     private const val SLACK_MS = 3_000L
     private const val TAIL_MS = 15_000L
 
-    fun window(q: Quake, home: Home): LongRange {
+    fun window(q: Quake, home: Place): LongRange {
         val d = Geo.hypocentreKm(q, home)
         val p = q.timeMs + (d / P_KMS * 1000).toLong()
         val s = q.timeMs + (d / S_KMS * 1000).toLong()
         return (p - SLACK_MS)..(s + TAIL_MS)
     }
 
-    fun match(q: Quake, home: Home, triggers: List<Trigger>, spans: List<Span>, nowMs: Long): Match {
+    fun match(q: Quake, home: Place, triggers: List<Trigger>, spans: List<Span>, nowMs: Long): Match {
         val w = window(q, home)
         val hit = triggers
             .filter { !it.bump && it.startMs <= w.last && it.endMs >= w.first }

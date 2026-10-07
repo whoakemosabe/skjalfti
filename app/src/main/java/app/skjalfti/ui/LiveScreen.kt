@@ -112,6 +112,8 @@ fun LiveScreen(onOpenLog: () -> Unit) {
             }
         }
 
+        LocationNudge()
+
         // The screen
         Panel(raised = false, padding = if (look.pixel) 6.dp else 16.dp, frame = if (look.pixel && shaking) c.hot else null) {
             if (!look.pixel) {

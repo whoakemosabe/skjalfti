@@ -3,7 +3,7 @@ package app.skjalfti
 import app.skjalfti.data.Felt
 import app.skjalfti.data.FeltStatus
 import app.skjalfti.data.Geo
-import app.skjalfti.data.Home
+import app.skjalfti.data.Places
 import app.skjalfti.data.Quake
 import app.skjalfti.data.Span
 import app.skjalfti.seismo.Trigger
@@ -12,7 +12,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class FeltTest {
-    private val home = Home.NJARDVIK
+    private val home = Places.NJARDVIK
     private val t0 = 1_800_000_000_000L
     // Roughly 14 km from Njarðvík, near Svartsengi.
     private val quake = Quake("q1", t0, 63.88, -22.43, 5.0, 2.4, "Svartsengi", true)

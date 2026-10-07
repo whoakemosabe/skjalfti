@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import app.skjalfti.Engine
 import app.skjalfti.Skin
+import app.skjalfti.data.Locator
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import kotlinx.coroutines.delay
@@ -42,6 +43,13 @@ fun SkjalftiApp() {
     // Listen while the app is on screen, and keep the quake log fresh every two minutes.
     LifecycleResumeEffect(Unit) {
         Engine.listen(context, "ui")
+        // Auto location: at most every 30 minutes, silently.
+        val home = Engine.home.value
+        if (Engine.autoLocate.value && Locator.hasPermission(context) &&
+            System.currentTimeMillis() - home.atMs > 30 * 60_000L
+        ) {
+            scope.launch { Engine.locate(context, auto = true) }
+        }
         val job = scope.launch {
             while (true) {
                 Engine.refresh()

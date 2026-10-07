@@ -5,7 +5,10 @@ import app.skjalfti.data.Achievement
 import app.skjalfti.data.Felt
 import app.skjalfti.data.FeltStatus
 import app.skjalfti.data.Geo
-import app.skjalfti.data.Home
+import app.skjalfti.data.Locator
+import app.skjalfti.data.Place
+import app.skjalfti.data.PlaceSource
+import app.skjalfti.data.Places
 import app.skjalfti.data.Match
 import app.skjalfti.data.NightReport
 import app.skjalfti.data.Quake
@@ -23,6 +26,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+
+sealed interface LocateState {
+    data object Idle : LocateState
+    data object Locating : LocateState
+    data class Failed(val why: String) : LocateState
+}
 
 /** One quake on the log, with how far away it was and whether the phone felt it. */
 data class QuakeRow(val quake: Quake, val distKm: Double, val match: Match)
@@ -47,8 +56,14 @@ object Engine {
 
     private val _skin = MutableStateFlow(Skin.PIXEL)
     val skin: StateFlow<Skin> = _skin.asStateFlow()
-    private val _home = MutableStateFlow(Home.NJARDVIK)
-    val home: StateFlow<Home> = _home.asStateFlow()
+    private val _home = MutableStateFlow(Places.NJARDVIK)
+    val home: StateFlow<Place> = _home.asStateFlow()
+    private val _saved = MutableStateFlow<List<Place>>(emptyList())
+    val saved: StateFlow<List<Place>> = _saved.asStateFlow()
+    private val _autoLocate = MutableStateFlow(false)
+    val autoLocate: StateFlow<Boolean> = _autoLocate.asStateFlow()
+    private val _locating = MutableStateFlow<LocateState>(LocateState.Idle)
+    val locating: StateFlow<LocateState> = _locating.asStateFlow()
     private val _radius = MutableStateFlow(60)
     val radius: StateFlow<Int> = _radius.asStateFlow()
     private val _sensitivity = MutableStateFlow(Sensitivity.MED)
@@ -79,6 +94,8 @@ object Engine {
         store = Store(File(app.filesDir, "skjalfti.json"))
         _skin.value = prefs.skin
         _home.value = prefs.home
+        _saved.value = prefs.saved
+        _autoLocate.value = prefs.autoLocate
         _radius.value = prefs.radiusKm
         _sensitivity.value = prefs.sensitivity
         _channel.value = prefs.channel
@@ -92,7 +109,83 @@ object Engine {
     }
 
     fun setSkin(s: Skin) { prefs.skin = s; _skin.value = s }
-    fun setHome(h: Home) { prefs.home = h; _home.value = h; scope.launch { recompute() } }
+    fun setHome(h: Place) {
+        prefs.home = h
+        _home.value = h
+        scope.launch { recompute() }
+    }
+
+    fun setAutoLocate(on: Boolean) { prefs.autoLocate = on; _autoLocate.value = on }
+
+    fun markLocationAsked() { prefs.locationAsked = true }
+    val locationAsked: Boolean get() = prefs.locationAsked
+
+    /**
+     * Finds the phone with GPS and makes that home. With [auto] (the app opening), a fix within a
+     * kilometre of a GPS home only refreshes it quietly, and failures stay silent.
+     * Returns the new home, or null if nothing was found.
+     */
+    suspend fun locate(context: Context, auto: Boolean = false): Place? {
+        if (_locating.value == LocateState.Locating) return null
+        if (!Locator.hasPermission(context)) {
+            if (!auto) _locating.value = LocateState.Failed("Location permission needed")
+            return null
+        }
+        if (!Locator.servicesOn(context)) {
+            if (!auto) _locating.value = LocateState.Failed("Location is turned off")
+            return null
+        }
+        _locating.value = LocateState.Locating
+        val fix = runCatching { Locator.current(context) }.getOrNull()
+        if (fix == null) {
+            _locating.value = if (auto) LocateState.Idle else LocateState.Failed("No fix yet. Try near a window")
+            return null
+        }
+        val now = System.currentTimeMillis()
+        val old = _home.value
+        val moved = Geo.km(old.lat, old.lon, fix.latitude, fix.longitude)
+        if (auto && old.source == PlaceSource.GPS && moved < 1.0) {
+            setHomeQuiet(old.copy(atMs = now))
+            _locating.value = LocateState.Idle
+            return old
+        }
+        // A saved place this close wins, so its name sticks.
+        val savedMatch = _saved.value.firstOrNull { Geo.km(it.lat, it.lon, fix.latitude, fix.longitude) <= 0.3 }
+        val place = savedMatch ?: Place(
+            id = "gps",
+            label = Locator.nameFor(context, fix.latitude, fix.longitude),
+            lat = fix.latitude,
+            lon = fix.longitude,
+            source = PlaceSource.GPS,
+            atMs = now,
+        )
+        setHome(place)
+        _locating.value = LocateState.Idle
+        return place
+    }
+
+    private fun setHomeQuiet(h: Place) { prefs.home = h; _home.value = h }
+
+    /** Saves the current home under [label] and keeps it selected. */
+    fun savePlace(label: String) {
+        val h = _home.value
+        val p = h.copy(id = "s${System.currentTimeMillis()}", label = label.trim().ifBlank { h.label }, source = PlaceSource.SAVED)
+        val list = listOf(p) + _saved.value.filterNot { it.same(p, 0.3) }
+        prefs.saved = list
+        _saved.value = list
+        setHome(p)
+    }
+
+    fun deletePlace(id: String) {
+        val list = _saved.value.filterNot { it.id == id }
+        prefs.saved = list
+        _saved.value = list
+        // Deleting the place in use keeps it as home, just no longer saved.
+        val h = _home.value
+        if (h.id == id) setHomeQuiet(h.copy(id = "gps", source = PlaceSource.GPS))
+    }
+
+    fun clearLocateError() { if (_locating.value is LocateState.Failed) _locating.value = LocateState.Idle }
     fun setRadius(km: Int) { prefs.radiusKm = km; _radius.value = km; scope.launch { recompute() } }
     fun setSensitivity(s: Sensitivity) { prefs.sensitivity = s; _sensitivity.value = s; Seismo.setSensitivity(s) }
     fun setChannel(c: Channel) { prefs.channel = c; _channel.value = c }

@@ -17,7 +17,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.skjalfti.Engine
 import app.skjalfti.Skin
-import app.skjalfti.data.Home
 import app.skjalfti.seismo.Sensitivity
 
 @Composable
@@ -25,7 +24,6 @@ fun SetupScreen() {
     val look = LocalLook.current
     val c = look.c
     val skin by Engine.skin.collectAsState()
-    val home by Engine.home.collectAsState()
     val radius by Engine.radius.collectAsState()
     val sens by Engine.sensitivity.collectAsState()
 
@@ -39,14 +37,7 @@ fun SetupScreen() {
             Choice(Skin.entries, skin, { it.label }, { Engine.setSkin(it) })
         }
 
-        Section("Home", "Distances and arrival times are measured from here.") {
-            Home.entries.chunked(3).forEach { row ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    row.forEach { h -> KButton(h.label, { Engine.setHome(h) }, Modifier.weight(1f), selected = h == home) }
-                }
-                Spacer(Modifier.height(6.dp))
-            }
-        }
+        LocationSection()
 
         Section("Radius", "Only quakes this close show on the log.") {
             Choice(listOf(30, 60, 100), radius, { "$it km" }, { Engine.setRadius(it) })
