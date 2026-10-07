@@ -38,9 +38,9 @@ object ShareCard {
     private const val W = 1080
     private const val H = 1350
 
-    private class Style(context: Context, val skin: Skin) {
+    private class Style(private val ctx: Context, val skin: Skin) {
         val pixel = skin == Skin.PIXEL
-        private fun font(id: Int) = runCatching { ResourcesCompat.getFont(context, id) }.getOrNull() ?: Typeface.MONOSPACE
+        private fun font(id: Int) = runCatching { ResourcesCompat.getFont(ctx, id) }.getOrNull() ?: Typeface.MONOSPACE
         val ui: Typeface = if (pixel) font(R.font.departure_mono) else font(R.font.geist_regular)
         val num: Typeface = if (pixel) font(R.font.doto_black) else font(R.font.geist_light)
         val mark: Typeface = if (pixel) font(R.font.martian_mono_extrabold) else font(R.font.geist_medium)
