@@ -79,6 +79,10 @@ fun ReportScreen() {
 
         if (report != null) {
             ReportHero(report)
+            val skin by Engine.skin.collectAsState()
+            KButton("Share report", {
+                app.skjalfti.share.ShareCard.share(context, app.skjalfti.share.ShareCard.night(context, skin, report), "skjalfti-night")
+            }, Modifier.fillMaxWidth())
         } else if (!watching) {
             Panel(Modifier.fillMaxWidth(), padding = 16.dp) {
                 Txt("No reports yet", look.t.title, c.ink)

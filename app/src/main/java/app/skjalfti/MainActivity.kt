@@ -27,6 +27,8 @@ class MainActivity : ComponentActivity() {
         Engine.init(this)
         WatchService.createChannels(this)
         UpdateWatch.createChannel(this)
+        app.skjalfti.alerts.QuakeAlerts.createChannel(this)
+        app.skjalfti.alerts.QuakeAlerts.schedule(this)
         UpdateWatch.schedule(this)
         UpdateWatch.waitingVersion.value = UpdateWatch.waiting(this)
         handleIntent(intent)
@@ -50,6 +52,11 @@ class MainActivity : ComponentActivity() {
         if (intent?.getBooleanExtra(UpdateWatch.EXTRA_OPEN_UPDATES, false) == true) {
             intent.removeExtra(UpdateWatch.EXTRA_OPEN_UPDATES)
             UpdateWatch.openUpdates.value = true
+        }
+        intent?.getStringExtra(app.skjalfti.alerts.QuakeAlerts.EXTRA_QUAKE)?.let { id ->
+            intent.removeExtra(app.skjalfti.alerts.QuakeAlerts.EXTRA_QUAKE)
+            app.skjalfti.ui.Nav.tab.value = app.skjalfti.ui.Tab.LOG
+            app.skjalfti.ui.Nav.open(app.skjalfti.ui.Overlay.Quake(id))
         }
     }
 }

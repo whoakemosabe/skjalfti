@@ -36,6 +36,8 @@ data class Match(
     /** Seconds after the quake's origin time when the phone started shaking. */
     val delaySec: Double? = null,
     val peakG: Float? = null,
+    /** The detector trigger that matched, which is also the key of its trace clip. */
+    val triggerStartMs: Long? = null,
 )
 
 /**
@@ -64,7 +66,7 @@ object Felt {
             .filter { !it.bump && it.startMs <= w.last && it.endMs >= w.first }
             .minByOrNull { it.startMs }
         if (hit != null) {
-            return Match(FeltStatus.FELT, (hit.startMs - q.timeMs) / 1000.0, hit.peakG)
+            return Match(FeltStatus.FELT, (hit.startMs - q.timeMs) / 1000.0, hit.peakG, hit.startMs)
         }
         if (nowMs < w.last) return Match(FeltStatus.PENDING)
         val covered = spans.any { it.startMs <= w.first && it.endMs >= w.last }

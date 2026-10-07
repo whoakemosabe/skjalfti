@@ -56,7 +56,7 @@ private fun LiveStatus.text(): String = when {
 }
 
 @Composable
-fun LiveScreen(onOpenLog: () -> Unit) {
+fun LiveScreen() {
     val look = LocalLook.current
     val c = look.c
     val channel by Engine.channel.collectAsState()
@@ -95,6 +95,8 @@ fun LiveScreen(onOpenLog: () -> Unit) {
                 Box(Modifier.size(9.dp).background(if (status.running && status.blink) c.hot else c.off))
                 Spacer(Modifier.width(6.dp))
                 Txt("REC", look.t.label, c.hot)
+                Spacer(Modifier.width(10.dp))
+                KButton("?", { Nav.open(Overlay.Guide) }, height = 32.dp)
             }
         } else {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -109,6 +111,8 @@ fun LiveScreen(onOpenLog: () -> Unit) {
                         Txt("Live 200 Hz", look.t.label.copy(fontFamily = Fonts.geistMono), c.ink)
                     }
                 }
+                Spacer(Modifier.width(8.dp))
+                KButton("?", { Nav.open(Overlay.Guide) }, height = 44.dp)
             }
         }
 
@@ -174,7 +178,7 @@ fun LiveScreen(onOpenLog: () -> Unit) {
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         KButton("Sens ${sens.label}", { Engine.setSensitivity(nextSens(sens)) }, Modifier.weight(1f))
-                        KButton("Sync", { scope.launch { Engine.refresh() } }, Modifier.weight(1f))
+                        KButton("Test", { Nav.open(Overlay.Test) }, Modifier.weight(1f))
                     }
                 }
             }
@@ -183,12 +187,18 @@ fun LiveScreen(onOpenLog: () -> Unit) {
                 Channel.entries.forEach { ch ->
                     KButton(ch.label, { Engine.setChannel(ch) }, Modifier.weight(1f), selected = ch == channel)
                 }
-                KButton("${gain}×", { Engine.setGain(nextGain(gain)) }, Modifier.weight(1f))
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                KButton("Gain ${gain}×", { Engine.setGain(nextGain(gain)) }, Modifier.weight(1f))
+                KButton("Sens ${sens.label.lowercase()}", { Engine.setSensitivity(nextSens(sens)) }, Modifier.weight(1f))
+                KButton("Test", { Nav.open(Overlay.Test) }, Modifier.weight(1f))
             }
         }
 
         // Last quake
-        LastQuake(last, onOpenLog)
+        LastQuake(last) {
+            if (last != null) Nav.open(Overlay.Quake(last.quake.id)) else Nav.tab.value = Tab.LOG
+        }
     }
 }
 

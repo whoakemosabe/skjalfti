@@ -28,18 +28,18 @@ import app.skjalfti.Skin
 import app.skjalfti.data.Locator
 import app.skjalfti.update.UpdateWatch
 import androidx.compose.runtime.LaunchedEffect
+import androidx.activity.compose.BackHandler
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-enum class Tab(val label: String) { LIVE("Live"), LOG("Log"), REPORT("Report"), SETUP("Setup") }
-
 @Composable
 fun SkjalftiApp() {
     val context = LocalContext.current
     val skin by Engine.skin.collectAsState()
-    var tab by rememberSaveable { mutableStateOf(Tab.LIVE) }
+    val tab by Nav.tab.collectAsState()
+    val overlay by Nav.overlay.collectAsState()
     val scope = rememberCoroutineScope()
 
     // Listen while the app is on screen, and keep the quake log fresh every two minutes.
@@ -69,20 +69,23 @@ fun SkjalftiApp() {
     val openUpdates by UpdateWatch.openUpdates.collectAsState()
     LaunchedEffect(openUpdates) {
         if (openUpdates) {
-            tab = Tab.SETUP
+            Nav.overlay.value = null
+            Nav.tab.value = Tab.SETUP
             UpdateWatch.openUpdates.value = false
         }
     }
 
+    BackHandler(enabled = overlay != null) { Nav.back() }
+
     Crossfade(skin, animationSpec = tween(450), label = "skin") { s ->
         CompositionLocalProvider(LocalLook provides lookFor(s)) {
-            Shell(s, tab, onTab = { tab = it })
+            Shell(s, tab, overlay, onTab = { Nav.overlay.value = null; Nav.tab.value = it })
         }
     }
 }
 
 @Composable
-private fun Shell(skin: Skin, tab: Tab, onTab: (Tab) -> Unit) {
+private fun Shell(skin: Skin, tab: Tab, overlay: Overlay?, onTab: (Tab) -> Unit) {
     val look = LocalLook.current
     val c = look.c
     if (skin == Skin.GLASS) {
@@ -90,27 +93,33 @@ private fun Shell(skin: Skin, tab: Tab, onTab: (Tab) -> Unit) {
         Box(Modifier.fillMaxSize()) {
             GlassBackground(c.phosphor, Modifier.fillMaxSize().layerBackdrop(backdrop))
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
-                Body(tab, onTab)
+                Body(tab, overlay, onTab)
             }
         }
     } else {
         Box(Modifier.fillMaxSize().background(c.bg)) {
             CompositionLocalProvider(LocalBackdrop provides null) {
-                Body(tab, onTab)
+                Body(tab, overlay, onTab)
             }
         }
     }
 }
 
 @Composable
-private fun Body(tab: Tab, onTab: (Tab) -> Unit) {
+private fun Body(tab: Tab, overlay: Overlay?, onTab: (Tab) -> Unit) {
     Column(Modifier.fillMaxSize().systemBarsPadding()) {
         Box(Modifier.weight(1f)) {
-            when (tab) {
-                Tab.LIVE -> LiveScreen(onOpenLog = { onTab(Tab.LOG) })
-                Tab.LOG -> LogScreen()
-                Tab.REPORT -> ReportScreen()
-                Tab.SETUP -> SetupScreen()
+            when (overlay) {
+                is Overlay.Quake -> QuakeScreen(overlay.id)
+                Overlay.Guide -> GuideScreen()
+                Overlay.Test -> TestScreen()
+                null -> when (tab) {
+                    Tab.LIVE -> LiveScreen()
+                    Tab.LOG -> LogScreen()
+                    Tab.MAP -> MapScreen()
+                    Tab.NIGHT -> ReportScreen()
+                    Tab.SETUP -> SetupScreen()
+                }
             }
         }
         NavBar(tab, onTab)
@@ -127,7 +136,7 @@ private fun NavBar(tab: Tab, onTab: (Tab) -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Tab.entries.forEach { t ->
-                KButton(t.label, { onTab(t) }, Modifier.weight(1f), selected = t == tab, accent = c.amber)
+                KButton(t.label, { onTab(t) }, Modifier.weight(1f), selected = t == tab, accent = c.amber, height = 46.dp)
             }
         }
     } else {

@@ -6,7 +6,12 @@ Two looks, one app: a **pixel console** (Departure Mono, Doto, Martian Mono, CRT
 
 - **Live**: a 200 Hz seismograph that scrolls by real elapsed time, so it stays smooth at any refresh rate while the pixel columns stay locked in place. Axis level meters, gain, channel (X, Y, Z or combined) and an STA/LTA detector, the same trigger real seismographs use.
 - **Log**: every quake in the last 24 hours within your radius, events per hour, and whether your phone felt it: **FELT**, **MISS** (recording but too faint), **OFF** (not recording) or **WAIT** (waves still arriving).
+- **Map**: the real coastline of south-west Iceland (Natural Earth), pixel-rasterised in the console, with distance rings and every quake sized by magnitude. Tap one to open it.
+- **Quake page**: where it was, what your phone recorded (a saved minute of trace with the predicted P and S wave arrivals), and **Feel it** (vibration at real speed), **Hear it** (the trace sped up 40× into audio) and **Share** (a card image in your current look).
 - **Night watch**: arm it at bedtime. A foreground service records all night and at 07:00 posts a report: how many quakes, how many your phone felt, the strongest, and a compressed trace of the night.
+- **Alerts**: a notification for quakes at or above M2.5, M3 or M4 within your radius, checked on every refresh and about every 15 minutes in the background.
+- **Test**: a quiet spot finder (live background shaking with a rating) and a shake test to tune sensitivity.
+- **Guide**: an in-app manual for every control and feature.
 - **Location**: GPS detection without Google Play services (fused, GPS or network provider), named by the phone's geocoder or the nearest Reykjanes town. Save places with your own names, switch between them, or let it auto-update when the app opens. Six preset towns too.
 - **Achievements**: first watch, seven nights, first felt, felt an M3, a hundred quakes logged.
 
@@ -21,6 +26,7 @@ A phone accelerometer is far less sensitive than a seismometer: expect to feel n
 | Source | Used for |
 | --- | --- |
 | Veðurstofa Íslands, `api.vedur.is/quakes/events` | Quake time, position, depth, magnitude, region |
+| Natural Earth 1:10m (public domain) | The coastline on the map |
 | The phone's location (optional) | Where distances and arrival times are measured from |
 | The phone's accelerometer | Everything else |
 
@@ -41,6 +47,9 @@ app/src/main/java/app/skjalfti/
   ui/       both skins: theme, glass, kit, trace renderer, screens
   watch/    night watch foreground service and morning report
   update/   GitHub release check, download, install, background watcher
+  alerts/   big-quake alerts
+  play/     feel it (vibration) and hear it (audio)
+  share/    share card images
 ```
 
 Fonts are bundled under the SIL Open Font License (see `licenses/`).

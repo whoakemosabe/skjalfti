@@ -60,6 +60,21 @@ class Prefs(context: Context) {
         get() = p.getInt("gain", 2)
         set(v) = p.edit().putInt("gain", v).apply()
 
+    /** Big-quake alert threshold; 0 = off. */
+    var alertMag: Float
+        get() = p.getFloat("alert_mag", 3.0f)
+        set(v) = p.edit().putFloat("alert_mag", v).apply()
+
+    /** Only quakes after this time can alert (set when alerts are turned on or first used). */
+    var alertsSince: Long
+        get() = p.getLong("alerts_since", 0L)
+        set(v) = p.edit().putLong("alerts_since", v).apply()
+
+    /** Quake ids already alerted, newest last. */
+    var alerted: List<String>
+        get() = p.getString("alerted", "")!!.split(',').filter { it.isNotBlank() }
+        set(v) = p.edit().putString("alerted", v.takeLast(200).joinToString(",")).apply()
+
     var onboarded: Boolean
         get() = p.getBoolean("onboarded", false)
         set(v) = p.edit().putBoolean("onboarded", v).apply()

@@ -8,6 +8,7 @@ import android.hardware.SensorManager
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.SystemClock
+import app.skjalfti.data.Clip
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.sqrt
@@ -48,6 +49,10 @@ object Seismo {
 
     /** Called on the sensor thread whenever a burst of shaking ends. */
     @Volatile var onTrigger: ((Trigger) -> Unit)? = null
+    /** Called with a trace clip about ten seconds after each (non-bump) trigger ends. */
+    @Volatile var onClip: ((Clip) -> Unit)? = null
+    private val pendingClips = ArrayList<Trigger>()
+
     /** Called on the sensor thread every ~20 s while running, and on stop, with wall-clock ms. */
     @Volatile var onHeartbeat: ((Long) -> Unit)? = null
 
@@ -97,12 +102,70 @@ object Seismo {
             if (!owners.remove(owner) || owners.isNotEmpty()) return
         }
         manager?.unregisterListener(listener)
+        flushClips(force = true)
         onHeartbeat?.invoke(System.currentTimeMillis())
         thread?.quitSafely()
         thread = null; handler = null; manager = null
     }
 
     fun setSensitivity(s: Sensitivity) { detector.sensitivity = s }
+
+    private const val CLIP_BEFORE_MS = 20_000L
+    private const val CLIP_AFTER_MS = 10_000L
+    private const val CLIP_MAX_MS = 60_000L
+
+    /** Saves a clip for every pending trigger whose tail has been recorded (or all, on stop). */
+    private fun flushClips(force: Boolean) {
+        val now = System.currentTimeMillis()
+        val due = synchronized(pendingClips) {
+            val d = pendingClips.filter { force || now >= it.endMs + CLIP_AFTER_MS }
+            pendingClips.removeAll(d.toSet())
+            d
+        }
+        for (t in due) {
+            val from = t.startMs - CLIP_BEFORE_MS
+            val to = minOf(t.endMs + CLIP_AFTER_MS, from + CLIP_MAX_MS)
+            val snap = snapshot(from, to, 100) ?: continue
+            runCatching { onClip?.invoke(Clip(from, 100, snap.first, snap.second, t.startMs, t.endMs, t.peakG)) }
+        }
+    }
+
+    /**
+     * Resamples the ring buffer between two wall-clock times to [rateHz]: the vertical axis
+     * averaged per bin, the combined shaking as each bin's peak. Gaps hold the last value.
+     */
+    fun snapshot(fromWallMs: Long, toWallMs: Long, rateHz: Int): Pair<FloatArray, FloatArray>? {
+        val h = head
+        if (h < 0 || toWallMs <= fromWallMs) return null
+        val n = ((toWallMs - fromWallMs) * rateHz / 1000).toInt()
+        if (n <= 0) return null
+        val zs = FloatArray(n)
+        val ss = FloatArray(n)
+        val counts = IntArray(n)
+        var i = h
+        var k = 0
+        val total = count
+        while (k < total) {
+            val w = wallMs(tNs[i])
+            if (w < fromWallMs) break
+            if (w < toWallMs) {
+                val b = ((w - fromWallMs) * rateHz / 1000).toInt().coerceIn(0, n - 1)
+                zs[b] += z[i]
+                counts[b]++
+                if (sum[i] > ss[b]) ss[b] = sum[i]
+            }
+            i = if (i == 0) CAPACITY - 1 else i - 1
+            k++
+        }
+        var any = false
+        var lastZ = 0f
+        var lastS = 0f
+        for (b in 0 until n) {
+            if (counts[b] > 0) { zs[b] /= counts[b]; lastZ = zs[b]; lastS = ss[b]; any = true }
+            else { zs[b] = lastZ; ss[b] = lastS }
+        }
+        return if (any) zs to ss else null
+    }
 
     fun startStrip() {
         synchronized(strip) { strip.clear(); stripPeak = 0f; stripMinuteStartNs = 0L }
@@ -159,6 +222,10 @@ object Seismo {
             detector.step(m, dt, wall)?.let { t ->
                 lastTrigger = t
                 onTrigger?.invoke(t)
+                if (!t.bump) {
+                    synchronized(pendingClips) { pendingClips += t }
+                    handler?.postDelayed({ flushClips(force = false) }, CLIP_AFTER_MS + 200)
+                }
             }
             if (detector.state == DetectorState.SHAKE) lastTriggerAtElapsedMs = ns / 1_000_000
 

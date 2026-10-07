@@ -102,10 +102,12 @@ fun Txt(
     color: Color = LocalLook.current.c.ink,
     modifier: Modifier = Modifier,
     maxLines: Int = 1,
+    /** Long reading text stays in sentence case even in the console. */
+    caps: Boolean = true,
 ) {
     val look = LocalLook.current
     Text(
-        look.say(text),
+        if (caps) look.say(text) else text,
         modifier = modifier,
         style = style,
         color = color,

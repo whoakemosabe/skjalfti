@@ -2,6 +2,9 @@ package app.skjalfti
 
 import android.content.Context
 import app.skjalfti.data.Achievement
+import app.skjalfti.alerts.QuakeAlerts
+import app.skjalfti.data.Clip
+import app.skjalfti.data.Clips
 import app.skjalfti.data.Felt
 import app.skjalfti.data.FeltStatus
 import app.skjalfti.data.Geo
@@ -52,6 +55,8 @@ data class QuakeState(
 object Engine {
     lateinit var store: Store; private set
     lateinit var prefs: Prefs; private set
+    lateinit var clips: Clips; private set
+    lateinit var app: Context; private set
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private val _skin = MutableStateFlow(Skin.PIXEL)
@@ -73,6 +78,10 @@ object Engine {
     private val _gain = MutableStateFlow(2)
     val gain: StateFlow<Int> = _gain.asStateFlow()
 
+    private val _alertMag = MutableStateFlow(3.0f)
+    /** Notify for quakes at least this big within the radius; 0 = off. */
+    val alertMag: StateFlow<Float> = _alertMag.asStateFlow()
+
     private val _quakes = MutableStateFlow(QuakeState())
     val quakes: StateFlow<QuakeState> = _quakes.asStateFlow()
     private var raw: List<Quake> = emptyList()
@@ -90,8 +99,11 @@ object Engine {
         if (initialised) return
         initialised = true
         val app = context.applicationContext
+        this.app = app
         prefs = Prefs(app)
         store = Store(File(app.filesDir, "skjalfti.json"))
+        clips = Clips(File(app.filesDir, "clips"))
+        _alertMag.value = prefs.alertMag
         _skin.value = prefs.skin
         _home.value = prefs.home
         _saved.value = prefs.saved
@@ -105,6 +117,7 @@ object Engine {
             store.addTrigger(t)
             scope.launch { recompute() }
         }
+        Seismo.onClip = { c -> clips.save(c) }
         Seismo.onHeartbeat = { wall -> openSpan?.let { store.extendSpan(it, wall) } }
     }
 
@@ -114,6 +127,18 @@ object Engine {
         _home.value = h
         scope.launch { recompute() }
     }
+
+    fun setAlertMag(m: Float) {
+        prefs.alertMag = m
+        // Start the clock now so turning alerts on never replays old quakes.
+        if (m > 0f) prefs.alertsSince = System.currentTimeMillis()
+        _alertMag.value = m
+    }
+
+    /** The trace clip for a quake the phone felt, if one was saved. */
+    fun clipFor(row: QuakeRow): Clip? = row.match.triggerStartMs?.let { clips.load(it) }
+
+    fun row(id: String): QuakeRow? = _quakes.value.rows.firstOrNull { it.quake.id == id }
 
     fun setAutoLocate(on: Boolean) { prefs.autoLocate = on; _autoLocate.value = on }
 
@@ -215,6 +240,7 @@ object Engine {
         try {
             raw = withContext(Dispatchers.IO) { Quakes.fetch(now - 24L * 3600_000, now) }
             recompute(fetchedAt = now)
+            runCatching { QuakeAlerts.check(app, raw) }
         } catch (e: Exception) {
             _quakes.value = _quakes.value.copy(loading = false, error = "OFFLINE")
         }
