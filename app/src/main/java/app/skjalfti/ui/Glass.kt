@@ -1,5 +1,6 @@
 package app.skjalfti.ui
 
+import android.graphics.RenderEffect
 import android.os.Build
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -8,19 +9,31 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.shape.CornerBasedShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.kyant.backdrop.BackdropEffectScope
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.drawPlainBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.colorControls
+import com.kyant.backdrop.effects.effect
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.highlight.Highlight
 import com.kyant.backdrop.highlight.HighlightStyle
@@ -29,57 +42,158 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /*
- * Liquid glass, the same recipe as Ljós: Kyant's Backdrop library records the glowing background
- * (layerBackdrop) and every card or control redraws it through a little extra colour, a frost and
- * the library's lens, which bends the rounded edge with depth and colour fringing. The lens needs
- * Android 13; older phones get a translucent tint instead.
+ * Liquid glass, the Ljós recipe on Kyant's Backdrop library. Two recordings drive it:
+ *  - the sky (the molten background alone), which cards and the controls on them refract, since
+ *    they can't refract a recording of the page they're part of;
+ *  - the page (sky plus everything scrolling on it), which the header and the floating tab bar
+ *    refract, so content visibly slides under them, frosted and bent.
+ * The lens and the dissolve need Android 13; older phones get a plain tint.
  */
 
-/** The background every glass piece on screen refracts. Null in the pixel skin. */
+/** The sky behind cards and the controls on them. Null in the pixel skin. */
 val LocalBackdrop = staticCompositionLocalOf<LayerBackdrop?> { null }
 
-private val glassOk get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+val glassOk: Boolean get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
 
-/** A card: frosted enough for text, a gentle lens, a rim highlight from the top left. */
+/** Fades the frosted copy out over the pane's last stretch, (1 - x)², so there's no edge. */
+private const val Dissolve = """
+uniform shader content;
+uniform float2 offset;
+uniform float fadeTop;
+uniform float fadeBottom;
+
+half4 main(float2 coord) {
+    float y = coord.y + offset.y;
+    float x = clamp((y - fadeTop) / max(fadeBottom - fadeTop, 1.0), 0.0, 1.0);
+    float a = (1.0 - x) * (1.0 - x);
+    return content.eval(coord) * half(a);
+}
+"""
+
+private fun BackdropEffectScope.dissolve(fadeTop: Float, fadeBottom: Float) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+    val shader = obtainRuntimeShader("SkjalftiDissolve", Dissolve).apply {
+        setFloatUniform("offset", -padding, -padding)
+        setFloatUniform("fadeTop", fadeTop)
+        setFloatUniform("fadeBottom", fadeBottom)
+    }
+    effect(RenderEffect.createRuntimeShaderEffect(shader, "content"))
+}
+
+/**
+ * A pane of liquid glass across the top of the screen, exactly as Ljós: frost and colour, no lens
+ * (a bar that fades out has no real edge to bend), dissolving over [fade] at the bottom, the
+ * page mirrored into the off-screen margins so the frost never pulls in emptiness at the sides.
+ */
+@Composable
+fun GlassHeader(
+    backdrop: LayerBackdrop,
+    bodyPx: () -> Float,
+    fade: Dp,
+    tint: Color,
+    modifier: Modifier = Modifier,
+    frost: Dp = 6.dp,
+) {
+    val density = LocalDensity.current
+    val fadePx = with(density) { fade.toPx() }
+    val margin = with(density) { 22.dp.roundToPx() }
+    val screenW = remember { floatArrayOf(0f) }
+    val shownTint = if (glassOk) tint.copy(alpha = tint.alpha * 0.22f) else tint
+    Box(
+        modifier
+            .fillMaxWidth()
+            .layout { measurable, constraints ->
+                val h = (bodyPx() + fadePx).toInt().coerceAtLeast(1)
+                val p = measurable.measure(constraints.copy(minHeight = h, maxHeight = h))
+                layout(p.width, h) { p.place(0, 0) }
+            }
+    ) {
+        Box(
+            Modifier
+                .layout { measurable, constraints ->
+                    screenW[0] = constraints.maxWidth.toFloat()
+                    val w = constraints.maxWidth + margin * 2
+                    val h = constraints.maxHeight + margin
+                    val p = measurable.measure(Constraints.fixed(w, h))
+                    layout(constraints.maxWidth, constraints.maxHeight) { p.place(-margin, -margin) }
+                }
+                .drawPlainBackdrop(
+                    backdrop = backdrop,
+                    shape = { RoundedCornerShape(0.dp) },
+                    effects = {
+                        if (glassOk) {
+                            colorControls(saturation = 1.15f)
+                            blur(frost.toPx())
+                            val bottom = size.height
+                            dissolve(bottom - fadePx, bottom)
+                        }
+                    },
+                    onDrawBackdrop = { drawPage ->
+                        if (!glassOk) return@drawPlainBackdrop
+                        drawPage()
+                        val m = margin.toFloat()
+                        val right = m + screenW[0]
+                        withTransform({ scale(-1f, 1f, pivot = Offset(m, 0f)) }) { drawPage() }
+                        withTransform({ scale(-1f, 1f, pivot = Offset(right, 0f)) }) { drawPage() }
+                        withTransform({ scale(1f, -1f, pivot = Offset(0f, m)) }) { drawPage() }
+                    },
+                    onDrawSurface = {
+                        val h = size.height
+                        val k = ((h - fadePx) / h).coerceIn(0f, 1f)
+                        drawRect(Brush.verticalGradient(0f to shownTint, k to shownTint.copy(alpha = shownTint.alpha * 0.6f), 1f to Color.Transparent))
+                    },
+                )
+        )
+    }
+}
+
+/**
+ * Liquid glass for a card, as Ljós: frosted enough for text, a gentle lens round its rounded edge
+ * with colour fringing, a rim highlight from the top left, a soft shadow and a dark wash.
+ */
 fun Modifier.glassCard(backdrop: LayerBackdrop, shape: CornerBasedShape): Modifier = drawBackdrop(
     backdrop = backdrop,
     shape = { shape },
     effects = {
         if (glassOk) {
-            colorControls(saturation = 1.25f)
-            blur(14.dp.toPx())
-            lens(14.dp.toPx(), 22.dp.toPx(), chromaticAberration = true)
+            colorControls(saturation = 1.2f)
+            blur(10.dp.toPx())
+            lens(16.dp.toPx(), 24.dp.toPx(), chromaticAberration = true)
         }
     },
     highlight = { Highlight(style = HighlightStyle.Default(angle = 45f)) },
-    shadow = { Shadow(radius = 24.dp, color = Color.Black.copy(alpha = 0.35f)) },
+    shadow = { Shadow(radius = 20.dp, color = Color.Black.copy(alpha = 0.25f)) },
     onDrawSurface = {
-        drawRect(Color(0x33070A10))
-        drawRect(Brush.verticalGradient(listOf(Color(0x1AFFFFFF), Color(0x05FFFFFF))))
+        drawRect(Color(0x4D070B16))
+        drawRect(Brush.verticalGradient(listOf(Color(0x14FFFFFF), Color(0x05FFFFFF))))
     },
 )
 
-/** A floating control: barely frosted, the lens bending its whole edge. */
-fun Modifier.glassControl(backdrop: LayerBackdrop, shape: CornerBasedShape, selected: Boolean): Modifier = drawBackdrop(
+/**
+ * True liquid glass for a floating control (button, pill, tab bar), as Ljós and iOS 26: barely
+ * frosted, the lens bending its whole edge with colour fringing, a rim highlight, a soft shadow.
+ */
+fun Modifier.glassControl(
+    backdrop: LayerBackdrop,
+    shape: CornerBasedShape,
+    lensHeight: Dp = 10.dp,
+    lensAmount: Dp = 18.dp,
+    wash: Color = Color(0x2605080F),
+): Modifier = drawBackdrop(
     backdrop = backdrop,
     shape = { shape },
     effects = {
         if (glassOk) {
-            colorControls(saturation = 1.3f)
-            blur(3.dp.toPx())
-            lens(10.dp.toPx(), 16.dp.toPx(), chromaticAberration = true)
+            colorControls(saturation = 1.25f)
+            blur(2.dp.toPx())
+            lens(lensHeight.toPx(), lensAmount.toPx(), chromaticAberration = true)
         }
     },
     highlight = { Highlight(style = HighlightStyle.Default(angle = 45f)) },
-    shadow = { Shadow(radius = 12.dp, color = Color.Black.copy(alpha = 0.25f)) },
+    shadow = { Shadow(radius = 14.dp, color = Color.Black.copy(alpha = 0.22f)) },
     onDrawSurface = {
-        drawRect(
-            when {
-                selected -> Color(0x33FFFFFF)
-                glassOk -> Color(0x1405080F)
-                else -> Color(0x22FFFFFF)
-            }
-        )
+        // A faint dark wash so white text and icons read over bright things behind.
+        drawRect(if (glassOk) wash else Color(0x33FFFFFF))
     },
 )
 

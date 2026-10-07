@@ -57,7 +57,7 @@ fun ReportScreen() {
     }
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(screenPadding()),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         TitleBar(if (look.pixel) "Night.rpt" else "Night watch") {

@@ -29,7 +29,7 @@ fun SetupScreen() {
     val sens by Engine.sensitivity.collectAsState()
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(screenPadding()),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         TitleBar(if (look.pixel) "Setup.cfg" else "Settings")

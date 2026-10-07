@@ -127,12 +127,12 @@ fun GuideScreen() {
     val c = look.c
     LazyColumn(
         Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = screenPadding(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
             TitleBar(if (look.pixel) "Help.txt" else "Guide") {
-                KButton("Back", { Nav.back() }, height = 36.dp)
+                BackKey()
             }
         }
         items(topics) { t ->

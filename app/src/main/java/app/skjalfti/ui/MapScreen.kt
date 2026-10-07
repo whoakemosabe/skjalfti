@@ -30,7 +30,7 @@ fun MapScreen() {
     val home by Engine.home.collectAsState()
     val radius by Engine.radius.collectAsState()
 
-    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(Modifier.fillMaxSize().padding(screenPadding()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         TitleBar(if (look.pixel) "Quake.map" else "Map") {
             Txt("${q.rows.size} in 24 h", look.t.label, c.muted)
         }

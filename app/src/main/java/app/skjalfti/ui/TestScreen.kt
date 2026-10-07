@@ -87,11 +87,11 @@ fun TestScreen() {
     }
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(screenPadding()),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         TitleBar(if (look.pixel) "Test.exe" else "Test") {
-            KButton("Back", { Nav.back() }, height = 36.dp)
+            BackKey()
         }
 
         // Quiet spot

@@ -52,10 +52,10 @@ object Playback {
             raw[f] = p
         }
         val peak = raw.maxOrNull()?.takeIf { it > 0f } ?: return IntArray(frames)
-        // Compress the range so quiet shaking is still faintly felt and the peak hits hard.
+        // Compress the range so quiet shaking is still clearly felt and the peak hits hard.
         return IntArray(frames) { i ->
             val v = (raw[i] / peak).toDouble().pow(0.6)
-            if (v < 0.08) 0 else (v * 255).toInt().coerceIn(1, 255)
+            if (v < 0.08) 0 else felt(v)
         }
     }
 
@@ -64,19 +64,23 @@ object Playback {
         val pS = hypocentreKm / Felt.P_KMS
         val sS = hypocentreKm / Felt.S_KMS
         val gap = ((sS - pS) * 1000 / FRAME_MS).toInt().coerceIn(3, 60)
-        val strength = ((magnitude + 1) / 5.0).coerceIn(0.25, 1.0)
+        // Small quakes still need to be clearly felt: a phone motor below ~1/3 power is a whisper.
+        val strength = ((magnitude + 2) / 6.0).coerceIn(0.6, 1.0)
         val rumble = ((1.5 + magnitude) * 1000 / FRAME_MS).toInt().coerceIn(20, 140)
         val out = ArrayList<Int>()
-        repeat(6) { out += (120 * strength).toInt() }
+        repeat(6) { out += felt(0.55 * strength) }
         repeat(gap) { out += 0 }
         val rnd = Random(7)
         for (i in 0 until rumble) {
             val decay = (1 - i.toDouble() / rumble).pow(1.6)
-            val v = (255 * strength * decay * (0.6 + 0.4 * rnd.nextDouble())).toInt()
-            out += if (v < 20) 0 else v
+            val v = strength * decay * (0.6 + 0.4 * rnd.nextDouble())
+            out += if (v < 0.06) 0 else felt(v)
         }
         return out.toIntArray()
     }
+
+    /** Maps 0..1 to a motor amplitude that's always noticeable: 90..255. */
+    private fun felt(v: Double): Int = (90 + v.coerceIn(0.0, 1.0) * 165).toInt().coerceIn(1, 255)
 
     /** Vibrates an envelope. Returns its length in ms. */
     fun feel(context: Context, env: IntArray): Long {
@@ -91,7 +95,14 @@ object Playback {
             val onOff = IntArray(env.size) { if (env[it] > 110) 255 else 0 }
             VibrationEffect.createWaveform(timings, onOff, -1)
         }
-        vib.vibrate(effect)
+        if (Build.VERSION.SDK_INT >= 33) {
+            // "Physical emulation" is the usage for vibration that recreates something real, like a
+            // game's rumble. Untagged vibrations can be muted by some phones' touch settings.
+            vib.vibrate(effect, android.os.VibrationAttributes.createForUsage(android.os.VibrationAttributes.USAGE_PHYSICAL_EMULATION))
+        } else {
+            @Suppress("DEPRECATION")
+            vib.vibrate(effect, AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_GAME).build())
+        }
         return env.size * FRAME_MS
     }
 

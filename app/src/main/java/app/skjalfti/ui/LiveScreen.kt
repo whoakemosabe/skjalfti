@@ -86,7 +86,7 @@ fun LiveScreen() {
     val last = quakes.rows.firstOrNull()
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(screenPadding()),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         // Header
@@ -99,20 +99,13 @@ fun LiveScreen() {
                 KButton("?", { Nav.open(Overlay.Guide) }, height = 32.dp)
             }
         } else {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Txt("Skjálfti", look.t.mark)
-                    Txt("${home.label} · ${status.text().lowercase()}", look.t.small, c.muted)
-                }
-                Panel(padding = 10.dp) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(8.dp).clip(CircleShape).background(if (status.running) c.phosphor else c.faint))
-                        Spacer(Modifier.width(8.dp))
-                        Txt("Live 200 Hz", look.t.label.copy(fontFamily = Fonts.geistMono), c.ink)
-                    }
-                }
+            TitleBar("Live") {
+                Box(
+                    Modifier.size(9.dp).clip(CircleShape)
+                        .background(if (status.running && (status.blink || !shaking)) (if (shaking) c.amber else c.phosphor) else c.faint)
+                )
                 Spacer(Modifier.width(8.dp))
-                KButton("?", { Nav.open(Overlay.Guide) }, height = 44.dp)
+                Txt(status.text(), look.t.small.copy(fontFamily = Fonts.geistMono), if (shaking) c.amber else c.ink)
             }
         }
 

@@ -25,6 +25,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -69,27 +71,31 @@ fun QuakeScreen(id: String) {
     val skin by Engine.skin.collectAsState()
     val row = quakes.rows.firstOrNull { it.quake.id == id }
     val playhead = remember { Animatable(0f) }
+    var playing by remember { mutableStateOf<String?>(null) }
+    var note by remember { mutableStateOf<String?>(null) }
     val clip = remember(row?.match?.triggerStartMs) { row?.let { Engine.clipFor(it) } }
 
     // Opened from a notification before the log has this quake: fetch it.
     LaunchedEffect(id) { if (row == null) Engine.refresh() }
     DisposableEffect(Unit) { onDispose { Playback.stop(context) } }
 
-    fun animate(play: Play) {
+    fun animate(play: Play, what: String) {
         if (play.durationMs <= 0) return
+        playing = what
         scope.launch {
             playhead.snapTo(0f)
             playhead.animateTo(1f, tween(play.durationMs.toInt(), easing = LinearEasing))
             playhead.snapTo(0f)
+            playing = null
         }
     }
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(screenPadding()),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         TitleBar(if (look.pixel) "Quake.dat" else "Quake") {
-            KButton("Back", { Nav.back() }, height = 36.dp)
+            BackKey()
         }
         if (row == null) {
             Panel(Modifier.fillMaxWidth()) {
@@ -161,21 +167,27 @@ fun QuakeScreen(id: String) {
 
         // Actions
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            KButton("Feel it", {
-                val env = if (clip != null) Playback.envelope(clip, clip.triggerStartMs - 2000, clip.endMs)
-                else Playback.synthetic(q.magnitude, hyp)
-                val ms = Playback.feel(context, env)
-                if (clip != null) animate(Play(ms))
+            KButton(if (playing == "feel") "Feeling…" else "Feel it", {
+                if (playing == "feel") {
+                    Playback.stop(context); playing = null
+                } else {
+                    val env = if (clip != null) Playback.envelope(clip, clip.triggerStartMs - 2000, clip.endMs)
+                    else Playback.synthetic(q.magnitude, hyp)
+                    val ms = Playback.feel(context, env)
+                    note = if (ms <= 0) "This phone has no vibration motor." else null
+                    animate(Play(ms), "feel")
+                }
             }, Modifier.weight(1f), selected = true, accent = c.amber)
-            KButton("Hear it", {
-                if (clip != null) animate(Play(Playback.hear(clip)))
+            KButton(if (playing == "hear") "Playing…" else "Hear it", {
+                if (clip != null) animate(Play(Playback.hear(clip)), "hear")
             }, Modifier.weight(1f), selected = clip != null)
             KButton("Share", {
                 val bmp = ShareCard.quake(context, skin, row, home, clip)
                 ShareCard.share(context, bmp, "skjalfti-${q.id}")
             }, Modifier.weight(1f))
         }
-        if (clip == null) Txt("Hear it needs a recording.", look.t.label, c.faint)
+        note?.let { Txt(it, look.t.small, c.hot, maxLines = 2) }
+        if (clip == null) Txt("Hear it needs a recording. Feel it plays a simulation.", look.t.label, c.muted, maxLines = 2)
     }
 }
 

@@ -12,6 +12,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -52,12 +55,13 @@ fun LogScreen() {
 
     LazyColumn(
         Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = screenPadding(),
         verticalArrangement = Arrangement.spacedBy(if (look.pixel) 6.dp else 10.dp),
     ) {
         item {
             TitleBar(if (look.pixel) "Quake.log" else "Quakes") {
-                KButton(if (q.loading) "…" else "Sync", { scope.launch { Engine.refresh() } }, height = 36.dp)
+                if (look.pixel) KButton(if (q.loading) "…" else "Sync", { scope.launch { Engine.refresh() } }, height = 36.dp)
+                else Txt("${q.rows.size} today", look.t.small, c.muted)
             }
         }
         item {
@@ -112,11 +116,16 @@ private fun QuakeLine(r: QuakeRow) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             val badge = magColor(q.magnitude, c)
             Box(
-                Modifier.size(width = 54.dp, height = 44.dp)
+                Modifier.defaultMinSize(minWidth = 56.dp).height(44.dp)
                     .then(if (look.pixel) Modifier.background(badge) else Modifier.clip(RoundedCornerShape(14.dp)).background(badge.copy(alpha = 0.22f))),
                 contentAlignment = Alignment.Center,
             ) {
-                Txt(Fmt.mag(q.magnitude), look.t.number.copy(fontSize = look.t.title.fontSize * 1.4f), if (look.pixel) c.onAccent else c.ink)
+                Txt(
+                    Fmt.mag(q.magnitude),
+                    look.t.number.copy(fontSize = if (look.pixel) 20.sp else 18.sp),
+                    if (look.pixel) c.onAccent else c.ink,
+                    Modifier.padding(horizontal = 6.dp),
+                )
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
