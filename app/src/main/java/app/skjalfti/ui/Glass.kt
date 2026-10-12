@@ -1,6 +1,5 @@
 package app.skjalfti.ui
 
-import android.graphics.RenderEffect
 import android.os.Build
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -33,7 +32,7 @@ import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.drawPlainBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.colorControls
-import com.kyant.backdrop.effects.effect
+import com.kyant.backdrop.effects.runtimeShaderEffect
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.highlight.Highlight
 import com.kyant.backdrop.highlight.HighlightStyle
@@ -70,14 +69,15 @@ half4 main(float2 coord) {
 }
 """
 
+/** Backdrop 2.x dropped effect(RenderEffect); custom shaders go through runtimeShaderEffect. */
 private fun BackdropEffectScope.dissolve(fadeTop: Float, fadeBottom: Float) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
-    val shader = obtainRuntimeShader("SkjalftiDissolve", Dissolve).apply {
-        setFloatUniform("offset", -padding, -padding)
+    val pad = padding
+    runtimeShaderEffect("SkjalftiDissolve", Dissolve, "content") {
+        setFloatUniform("offset", -pad, -pad)
         setFloatUniform("fadeTop", fadeTop)
         setFloatUniform("fadeBottom", fadeBottom)
     }
-    effect(RenderEffect.createRuntimeShaderEffect(shader, "content"))
 }
 
 /**
